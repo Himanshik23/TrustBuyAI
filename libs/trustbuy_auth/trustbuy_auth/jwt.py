@@ -28,6 +28,16 @@ class TokenError(Exception):
 
 @lru_cache
 def _private_key() -> str:
+    # Literal PEM in an env var takes priority - required whenever services
+    # run as separate deployments with no shared disk (e.g. one Railway
+    # service per microservice): the file-based fallback below only works
+    # when every service can see the same generated keypair on a shared
+    # volume, which docker-compose gives for free but separate cloud
+    # services do not. Paste the SAME key pair into every service's env
+    # vars in that case, so a token signed here verifies everywhere else.
+    inline = os.environ.get("JWT_PRIVATE_KEY")
+    if inline:
+        return inline.replace("\\n", "\n")
     path = Path(os.environ.get("JWT_PRIVATE_KEY_PATH", "/keys/private.pem"))
     pub_path = Path(os.environ.get("JWT_PUBLIC_KEY_PATH", "/keys/public.pem"))
     if not path.exists():
@@ -38,6 +48,9 @@ def _private_key() -> str:
 
 @lru_cache
 def _public_key() -> str:
+    inline = os.environ.get("JWT_PUBLIC_KEY")
+    if inline:
+        return inline.replace("\\n", "\n")
     path = Path(os.environ.get("JWT_PUBLIC_KEY_PATH", "/keys/public.pem"))
     priv_path = Path(os.environ.get("JWT_PRIVATE_KEY_PATH", "/keys/private.pem"))
     if not path.exists():
